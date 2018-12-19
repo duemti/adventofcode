@@ -1,0 +1,8 @@
+10 players; last marble is worth 10 points: high score is 8317
+10 players; last marble is worth 100 points: high score is 146373
+10 players; last marble is worth 1000 points: high score is 2764
+10 players; last marble is worth 10000 points: high score is 54718
+10 players; last marble is worth 100000 points: high score is 37305
+10 players; last marble is worth 1000000 points: high score is 37305
+10 players; last marble is worth 10000000 points: high score is 37305
+10 players; last marble is worth 100000000 points: high score is 37305
