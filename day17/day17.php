@@ -2,15 +2,13 @@
 
 function find_range($clay_veins)
 {
-	$minx = 500;
-	$maxx = 500;
 	$maxy = 1;
 
 	foreach ($clay_veins as $cv) {
-		if ($cv['x'] < $minx)
+		if (!isset($minx) || $cv['x'] < $minx)
 			$minx = $cv['x'];
 
-		if ($cv['x'] > $maxx)
+		if (!isset($maxx) || $cv['x'] > $maxx)
 			$maxx = $cv['x'];
 
 		if (!isset($miny) || $cv['y'] < $miny)
@@ -19,208 +17,136 @@ function find_range($clay_veins)
 		if ($cv['y'] > $maxy)
 			$maxy = $cv['y'];
 	}
-	return ['miny' => $miny, 'maxy' => $maxy, 'minx' => $minx, 'maxx' => $maxx];
+	return ['miny' => $miny, 'maxy' => $maxy + 1, 'minx' => $minx - 1, 'maxx' => $maxx + 1];
 }
 
-// Check if water can flow.
-function	check_if_water_can_flow($x, $y, &$clay_veins, &$water_at_rest)
+function	first_part($clay_veins_coor)
 {
-	$coor = array(
-		'x' => $x,
-		'y' => $y
-	);
+	$dimensions = find_range($clay_veins_coor);
+	$grid = setup_the_grid($clay_veins_coor, $dimensions);
+	$depth = 0;
 
-	if (in_array($coor, $clay_veins) || in_array($coor, $water_at_rest))
-		return false;
-	return true;
-}
-
-function	flow(&$springs_coor, &$springs_root, $clay_veins, $water_at_rest, $maxy)
-{
-	$add_to_springs = [];
-
-
-	$springs = &$springs_root["coor"];
-	$spring = $springs[0];
-
-	if ($springs_root["can_flow"] === false)
-		return false;
-	// Flow downwards.
-	if (check_if_water_can_flow($spring['x'], ++$spring['y'], $clay_veins, $water_at_rest)) {
-		if ($spring['y'] > $maxy) {
-			$springs_root["can_flow"] = false;
-			return false;
-		}
-		$springs_root["direction"] = "down";
-		array_unshift($springs, $spring);
-		array_push($springs_coor, $spring);
+	while ($depth < $dimensions['maxy']) {
+		if (flow_one_row($grid[$depth], $grid[$depth + 1], $dimensions))
+			$depth++;
+		else
+			$depth--;
 	}
-	// Flow horizontally.
-	else {
-		$spring['y']--;
-		$spring['x']--;
-		// Flow left.
-		if ($springs_root["direction"] != "right") {
-			if (check_if_water_can_flow($spring['x'], $spring['y'], $clay_veins, $water_at_rest)) {
+	return display($grid, $dimensions);
 
-				if ($springs_root["direction"] == "down") {
-					$springs_root["left"] = array(
-						"coor" => [$spring],
-						"left" => [],
-						"right" => [],
-						"can_flow" => true,
-						"direction" => "left"
-					);
-				} else
-					array_unshift($springs, $spring);
+}
 
-				array_push($springs_coor, $spring);
+// function to move the water horizontally.
+//
+// @var	$y	int	y coordinate of depth at which to move the water.
+// @var	$x	int	minimum x coordinate for width.
+// @var	$y	int	maximum y coordinate for width.
+function	flow_one_row(&$row, &$next_row, $range)
+{
+	$water_moved = false;
+	$go_up_again = false;
+
+	for ($x = $range['minx']; $x <= $range['maxx']; $x++) {
+
+		if ($row[$x] == "|" || $row[$x] == "+") {
+
+			if ($next_row[$x] == "." || $next_row[$x] == "|") {
+				$next_row[$x] = "|";
 			}
-			else if ($springs_root["direction"] == "left")
-				$springs_root["can_flow"] = false;
-		}
+			else {
+				$left = check_left($row, $next_row, $x);
+				$right = check_right($row, $next_row, $x);
 
-		$spring['x']++;
-		$spring['x']++;
-		// Flow right.
-		if ($springs_root["direction"] != "left") {
-			if (check_if_water_can_flow($spring['x'], $spring['y'], $clay_veins, $water_at_rest)) {
-
-				if ($springs_root["direction"] == "down") {
-					$springs_root["right"] = array(
-						"coor" => [$spring],
-						"left" => [],
-						"right" => [],
-						"can_flow" => true,
-						"direction" => "right"
-					);
-				} else
-					array_unshift($springs, $spring);
-
-				array_push($springs_coor, $spring);
-			}
-			else if ($springs_root["direction"] == "right")
-				$springs_root["can_flow"] = false;
-		}
-	}
-	return true;
-}
-
-function	recursive_flow(&$water_flow_allcoor, &$water_flow, &$clay_veins, &$water_at_rest, &$maxy)
-{
-	if (empty($water_flow))
-		return false;
-	if (false == $water_flow["can_flow"])
-		return false;
-
-
-	$wf = $water_flow;
-/*	if ($wf["direction"] == "left" && !empty($wf["left"]) && $wf["left"]["can_flow"] === false)
-		$water_flow["can_flow"] = false;
-	if ($wf["direction"] == "right" && !empty($wf["right"]) && $wf["right"]["can_flow"] === false)
-		$water_flow["can_flow"] = false;
- */
-	if ((!empty($water_flow["left"]) && false == $water_flow["left"]["can_flow"]) &&
-		(!empty($water_flow["right"]) && false == $water_flow["right"]["can_flow"])) {
-		$water_at_rest = array_unique(array_merge($water_at_rest, $water_flow["left"]["coor"], $water_flow["right"]["coor"], [array_shift($water_flow["coor"])]), SORT_REGULAR);
-		$water_flow["left"] = [];
-		$water_flow["right"] = [];
-	}
-	else if ((empty($wf["left"]) && (!empty($wf["right"]) && $wf["right"]["can_flow"] === false) )) {
-		$water_at_rest = array_unique(array_merge($water_at_rest, $water_flow["right"]["coor"], [array_shift($water_flow["coor"])] ), SORT_REGULAR);
-		$water_flow["right"] = [];
-	}
-	else if (empty($wf["right"]) && (!empty($wf["left"]) && $wf["left"]["can_flow"] === false) ) {
-		$water_at_rest = array_unique(array_merge($water_at_rest, $water_flow["left"]["coor"], [array_shift($water_flow["coor"])] ), SORT_REGULAR);
-		$water_flow["left"] = [];
-	}
-
-	if (!empty($water_flow["right"]))
-		$one = recursive_flow($water_flow_allcoor, $water_flow["right"], $clay_veins, $water_at_rest, $maxy);
-
-	if (!empty($water_flow["left"]))
-		$true = recursive_flow($water_flow_allcoor, $water_flow["left"], $clay_veins, $water_at_rest, $maxy);
-
-	if (isset($one) && isset($two))
-		return $one && $two;
-	if (isset($one))
-		return $one;
-	if (isset($two))
-		return $two;
-
-echo "threads.\n";
-$res = flow($water_flow_allcoor, $water_flow, $clay_veins, $water_at_rest, $maxy);
-var_dump($res);
-return $res;
-}
-
-function	first_part($clay_veins)
-{
-	$range = find_range($clay_veins);
-	$water_at_rest = [];
-	$springs = [
-		"root_spring" => [
-			"coor" => [
-				[
-					'x' => 499,
-					'y' => 0
-				]
-			],
-			"left" => [],
-			"right" => [],
-			"can_flow" => true,
-			"direction" => "down"
-		],
-		"all_coor" => [
-			[
-				'x' => 499,
-				'y' => 0
-			]
-		]
-	];
-
-	$status = true;
-	while ($status) {
-		$status = recursive_flow($springs["all_coor"], $springs["root_spring"], $clay_veins, $water_at_rest, $range["maxy"]);
-//var_dump($springs['root_spring']);
-		print_data($clay_veins, $water_at_rest, $springs["all_coor"], $range);
-	}
-
-	return count(array_unique($water_at_rest, SORT_REGULAR)) + count(array_unique($springs, SORT_REGULAR)) - $range['miny'];
-}
-
-function	print_data($clay_veins, $water_at_rest, $springs, $range)
-{
-	for ($y = 0; $y <= $range['maxy'] + 1; $y++) {
-		for ($x = $range['minx'] - 1; $x <= $range['maxx'] + 1; $x++) {
-
-			$coor = [
-				'y' => $y,
-				'x' => $x
-			];
-
-			$printed = false;
-			if (in_array($coor, $clay_veins)) {
-				echo "\e[100m#\e[0m";
-				$printed = true;
-			}
-			if (in_array($coor, $water_at_rest)) {
-				echo "\e[0;44m~\e[0m";
-				$printed = true;
-			}
-			else	if (in_array($coor, $springs)) {
-					echo "|";
-					$printed = true;
+				if ($left && $right) {
+					while (++$left < $right)
+						$row[$left] = "~";
+					$go_up_again = true;
 				}
-			if (!$printed)
-				echo ".";
+			}
+			$water_moved = true;
 		}
-		echo "\n";
 	}
-	echo "\n";
+	return ($go_up_again) ? false : $water_moved;
 }
 
+function	check_left(&$row, &$next_row, $x)
+{
 
+	while ($row[--$x] == "." || $row[$x] == "|") {
+		$row[$x] = "|";
+		if ($next_row[$x] == "." || $next_row[$x] == "|") {
+			$next_row[$x] = "|";
+			return 0;
+		}
+	}
+	return $x;
+}
+
+function	check_right(&$row, &$next_row, &$x)
+{
+
+	while ($row[++$x] == "." || $row[$x] == "|") {
+		$row[$x] = "|";
+		if ($next_row[$x] == "." || $next_row[$x] == "|") {
+			$next_row[$x] = "|";
+			return 0;
+		}
+	}
+	return $x;
+}
+
+function	setup_the_grid($clay_veins_coordinates, $range)
+{
+	$grid = array_fill(0, $range['maxy'] + 1, array_fill($range['minx'], $range['maxx'], "."));
+
+	// setting up the clay veins.
+	foreach ($clay_veins_coordinates as $coor)
+		$grid [$coor['y']] [$coor['x']] = "#";
+
+	// setting up the spring.
+	$grid[0][500] = "+";
+
+	return $grid;
+}
+
+function	display($grid, $range)
+{
+	$water_can_reach = 0;
+
+	for ($y = 0; $y <= $range['maxy']; $y++) {
+		for ($x = $range['minx']; $x <= $range['maxx']; $x++) {
+			$pin = $grid[$y][$x];
+
+			if ($pin == "#")
+				echo "\e[90m";
+			else if ($pin == "~" && $water_can_reach++)
+				echo "\e[34m";
+			else if ($pin == "|" || $pin == "+") {
+				if ($y < $range['maxy'] && $y >= $range['miny'])
+					$water_can_reach++;
+				echo "\e[94m";
+			}
+			else
+				echo "\e[33m";
+
+			echo $pin . "\e[0m";
+		}
+		echo PHP_EOL;
+	}
+	echo PHP_EOL;
+	return $water_can_reach;
+}
+
+//
+// The function digest the input in an array of arrays of the form:
+// [
+//    [
+// 	    'x' => ?,
+// 	    'y' => ?
+// 	  ],
+// 	  ...
+// ]
+//
 function digest_input($input)
 {
 	$result = [];
