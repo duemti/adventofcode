@@ -20,7 +20,7 @@ function find_range($clay_veins)
 	return ['miny' => $miny, 'maxy' => $maxy + 1, 'minx' => $minx - 1, 'maxx' => $maxx + 1];
 }
 
-function	first_part($clay_veins_coor)
+function	first_part($clay_veins_coor, $visualize_result)
 {
 	$dimensions = find_range($clay_veins_coor);
 	$grid = setup_the_grid($clay_veins_coor, $dimensions);
@@ -32,7 +32,7 @@ function	first_part($clay_veins_coor)
 		else
 			$depth--;
 	}
-	return display($grid, $dimensions);
+	return display($grid, $dimensions, $visualize_result);
 
 }
 
@@ -109,32 +109,38 @@ function	setup_the_grid($clay_veins_coordinates, $range)
 	return $grid;
 }
 
-function	display($grid, $range)
+function	display($grid, $range, $visualize_result)
 {
 	$water_can_reach = 0;
+	$settled_water = 0;
 
 	for ($y = 0; $y <= $range['maxy']; $y++) {
 		for ($x = $range['minx']; $x <= $range['maxx']; $x++) {
 			$pin = $grid[$y][$x];
 
 			if ($pin == "#")
-				echo "\e[90m";
-			else if ($pin == "~" && $water_can_reach++)
-				echo "\e[34m";
+				$color = "\e[90m";
+			else if ($pin == "~" && $water_can_reach++) {
+				$settled_water++;
+				$color = "\e[34m";
+			}
 			else if ($pin == "|" || $pin == "+") {
 				if ($y < $range['maxy'] && $y >= $range['miny'])
 					$water_can_reach++;
-				echo "\e[94m";
+				$color = "\e[94m";
 			}
 			else
-				echo "\e[33m";
+				$color = "\e[33m";
 
-			echo $pin . "\e[0m";
+			if ($visualize_result)
+				echo $color . $pin . "\e[0m";
 		}
-		echo PHP_EOL;
+		if ($visualize_result)
+			echo PHP_EOL;
 	}
-	echo PHP_EOL;
-	return $water_can_reach;
+	if ($visualize_result)
+		echo PHP_EOL;
+	return ["water_can_reach" => $water_can_reach, "settled_water" => $settled_water];
 }
 
 //
@@ -169,33 +175,37 @@ function digest_input($input)
 }
 
 
-if ($argc != 2) {
-  echo "Usage: ".$argv[0]." [input file]\n";
+if ($argc < 2 || $argc > 3) {
+	echo "Usage: ".$argv[0]." [-o] [input file]\n";
+	echo "Options:\n\t-o Visualize the result.";
 } else {
-  $input = file_get_contents($argv[1]);
-  if (!$input)
-  {
-    echo "Failed to open ".$argv[1]."\n";
-  }
-  else {
-    // Part 1
-    echo "Part 1:\n";
-	$start = microtime(true);
+	$visualize_result = false;
+	$file = $argv[1];
+	if ($argc == 3) {
+		if ($argv[1] == "-o")
+			$visualize_result = true;
+		else
+			die("Error: no such option.");
+		$file = $argv[2];
+	}
+	$input = file_get_contents($file);
+	if (!$input) {
+    	die("Failed to open ".$argv[1]."\n");
+	}
+	else {
+		echo "Part 1:\n";
+		$start = microtime(true);
 
-	// Split the string into array of string's by newline.
-	$input = explode("\n", $input);
+		// Split the string into array of string's by newline.
+		$input = explode("\n", $input);
 
-	// Making sense of input.
-	$input = digest_input($input);
+		// Making sense of input.
+		$input = digest_input($input);
 
-	$result = first_part($input);
-	echo "Water can reach \e[92m" . $result. "\e[0m square meters.\n";
+		$result = first_part($input, $visualize_result);
+		echo "Water can reach \e[92m" . $result["water_can_reach"]. "\e[0m square meters.\n";
+		echo "After the spring has drained only \e[92m" . $result["settled_water"] . "\e[0m s.m. of water remains trapped by clay veins.\n";
 
-    echo "Done in ".(microtime(true) - $start)." sec.\n";
-
-    // Part 2
-    //echo "\nPart 2:\n";
-    //$start = microtime(true);
-    //echo "Done in ".(microtime(true) - $start)." sec.\n";
+	    echo "Done in ".(microtime(true) - $start)." sec.\n";
   }
 }
