@@ -2,11 +2,40 @@
 
 function	digest_input($input)
 {
-	return ;
+	$dinput = [];
+
+	foreach (explode("\n", $input) as $row) {
+		if ($row)
+			array_push($dinput, str_split($row));
+	}
+	return $dinput;
 }
 
-function	solve($input)
+function	display($area)
 {
+	foreach ($area as $row) {
+		foreach ($row as $acre) {
+
+			switch ($acre) {
+				case "#":
+					echo "\e[90m";
+					break;
+				case "|":
+					echo "\e[32m";
+					break;
+				default:
+					echo "\e[94m";
+			}
+			echo $acre . "\e[0m";
+		}
+		echo PHP_EOL;
+	}
+	echo "Legend:\n\t\e[90m#\e[0m - Lumberyard.\n\t\e[32m|\e[0m - Tree's.\n\t\e[94m.\e[0m - Open field.\n\n";
+}
+
+function	solve($area)
+{
+	display($area);
 	return ;
 }
 
@@ -30,9 +59,6 @@ if ($argc < 2 || $argc > 3) {
 	else {
 		echo "Solving...\n";
 		$start = microtime(true);
-
-		// Split the string into array of string's by newline.
-		$input = explode("\n", $input);
 
 		// Making sense of input.
 		$input = digest_input($input);
