@@ -117,7 +117,7 @@ function	tick(&$area)
 	return $was_changes;
 }
 
-function	solve($area, $visualize, $time)
+function	solve($area, $visualize, $time, $snapshot_at = 1000)
 {
 	$minutes = 0;
 	echo "Initial state:\n";
@@ -126,7 +126,20 @@ function	solve($area, $visualize, $time)
 	while ($minutes++ < $time) {
 		if (tick($area) === false)
 			break;
-		echo $minutes.PHP_EOL;
+
+		// Detect if there is a repeatable pattern.
+		if ($minutes == $snapshot_at) {
+			$area_snapshot = json_encode($area);
+		}
+		else if (isset($area_snapshot)) {
+			if ($area_snapshot === json_encode($area)) {
+				echo "Found pattern between ".$snapshot_at." and ".$minutes.PHP_EOL;
+				$add = $minutes - $snapshot_at;
+				while ($minutes + $add < $time)
+					$minutes += $add;
+			}
+		}
+
 		if ($visualize) {
 			echo "After ".$minutes." minutes.\n";
 			display($area, false);
@@ -138,22 +151,32 @@ function	solve($area, $visualize, $time)
 }
 
 
-if ($argc < 2 || $argc > 3) {
-	echo "Usage: ".$argv[0]." [-o] [input file]\n";
-	echo "Options:\n\t-o Visualize the result.";
+if ($argc < 2 || $argc > 5) {
+	echo "Usage: ".$argv[0]." [-o] [input file] [minutes] [snapshot]\n";
+	echo "Options:\n\t-o Visualize the result.\n";
+	echo "Arguments:\n";
+	echo "\tminutes - The number of minutes to run. (default 10).\n";
+	echo "\tsnapshot- At which minute to take a snapshot of area to use for pattern detection. (default 1000)\n";
 } else {
 	$visualize_result = false;
-	$file = $argv[1];
-	if ($argc == 3) {
-		if ($argv[1] == "-o")
-			$visualize_result = true;
-		else
-			die("Error: no such option.");
-		$file = $argv[2];
+	$minutes = 10;
+	$snapshot_at = 1000;
+	$arg = 1;
+
+	if ($argv[$arg] == "-o") {
+		$visualize_result = true;
+		$arg++;
 	}
+	$file = $argv[$arg++];
+	if (isset($argv[$arg]))
+		$minutes = intval($argv[$arg++]);
+	if (isset($argv[$arg]))
+		$snapshot_at = intval($argv[$arg++]);
+
+
 	$input = file_get_contents($file);
 	if (!$input) {
-    	die("Failed to open ".$argv[1]."\n");
+    	die("Failed to open ".$file."\n");
 	}
 	else {
 		echo "Solving...\n";
@@ -161,14 +184,10 @@ if ($argc < 2 || $argc > 3) {
 
 		// Making sense of input.
 		$input = digest_input($input);
-		$result = solve($input, $visualize_result, 10);
 
-		echo "There are \e[32m".$result["woods"]."\e[0m acres covered with trees and \e[32m".$result["open_fields"]."\e[0m acres of open field.\n";
-		echo "Also there are \e[32m".$result["lumberyards"]."\e[0m lumberyards.\n";
-		echo "Total resource value is: \e[32m". $result["lumberyards"] * $result["woods"] . "\e[0m.\n";
-
-		$result = solve($input, $visualize_result, 1000000000);
-		echo "After 1 Billion minutes, the resources value will be: \e[32m".$result["lumberyards"] * $result["woods"] . "\e[0m.\n";
+		$result = solve($input, $visualize_result, $minutes, $snapshot_at);
+		echo "There are \e[32m".$result["woods"]."\e[0m acres covered with trees, \e[32m".$result["open_fields"]."\e[0m acres of open field and \e[32m".$result["lumberyards"]."\e[0m lumberyards.\n";
+		echo "After ".$minutes." minutes, the total resources value will be: \e[32m".$result["lumberyards"] * $result["woods"] . "\e[0m.\n";
 
 	    echo "Done in ".(microtime(true) - $start)." sec.\n";
   }
