@@ -6,80 +6,116 @@ function	digest_input($input)
 
 	foreach (explode("\n", $input) as $row) {
 		if ($row)
-			array_push($dinput, str_split($row));
+			array_push($dinput, explode(" ", $row));
 	}
 	return $dinput;
 }
 
-function	display($area, $show_legend = true)
+function	execute_line($line, &$ip, &$registers)
 {
-	$count = ["woods" => 0, "open_fields" => 0, "lumberyards" => 0];
-
-	foreach ($area as $row) {
-		foreach ($row as $acre) {
-
-			switch ($acre) {
-				case "#":
-					echo "\e[90m";
-					$count["lumberyards"]++;
-					break;
-				case "|":
-					echo "\e[32m";
-					$count["woods"]++;
-					break;
-				default:
-					$count["open_fields"]++;
-					echo "\e[94m";
-			}
-			echo $acre . "\e[0m";
-		}
-		echo PHP_EOL;
+	switch ($line[0]) {
+		case "setr":
+			$registers[$line[3]] = $registers[$line[1]];
+			break;
+		case "seti":
+			$registers[$line[3]] = $line[1];
+			break;
+		case "addr":
+			$registers[$line[3]] = $registers[$line[1]] + $registers[$line[2]];
+			break;
+		case "addi":
+			$registers[$line[3]] = $registers[$line[1]] + $line[2];
+			break;
+		case "mulr":
+			$registers[$line[3]] = $registers[$line[1]] * $registers[$line[2]];
+			break;
+		case "muli":
+			$registers[$line[3]] = $registers[$line[1]] * $line[2];
+			break;
+		case "banr":
+			$registers[$line[3]] = $registers[$line[1]] & $registers[$line[2]];
+			break;
+		case "bani":
+			$registers[$line[3]] = $registers[$line[1]] & $line[2];
+			break;
+		case "borr":
+			$registers[$line[3]] = $registers[$line[1]] | $registers[$line[2]];
+			break;
+		case "bori":
+			$registers[$line[3]] = $registers[$line[1]] | $line[2];
+			break;
+		case "gtir":
+			$registers[$line[3]] = ($line[1] > $registers[$line[2]]) ? 1 : 0;
+			break;
+		case "gtri":
+			$registers[$line[3]] = ($registers[$line[1]] > $line[2]) ? 1 : 0;
+			break;
+		case "gtrr":
+			$registers[$line[3]] = ($registers[$line[1]] > $registers[$line[2]]) ? 1 : 0;
+			break;
+		case "eqir":
+			$registers[$line[3]] = ($registers[$line[2]] == $line[1]) ? 1 : 0;
+			break;
+		case "eqri":
+			$registers[$line[3]] = ($registers[$line[1]] == $line[2]) ? 1 : 0;
+			break;
+		case "eqrr":
+			$registers[$line[3]] = ($registers[$line[1]] == $registers[$line[2]]) ? 1 : 0;
+			break;
+		default:
+			echo "\e[31mNo such instruction: ".$line[0]."\e[0m";
+			return false;
 	}
-	if ($show_legend)
-		echo "Legend:\n\t\e[90m#\e[0m - Lumberyard.\n\t\e[32m|\e[0m - Tree's.\n\t\e[94m.\e[0m - Open field.\n";
-	echo PHP_EOL;
-	return $count;
+	return true;
 }
 
 function	solve($input)
 {
+	$ip = 0;
+	$registers = [
+		0, 0, 0, 0, 0, 0
+	];
+
+	// Pre-processing
+	if ($input[0][0] == "#ip") {
+		$ip_reg = intval($input[0][1]);
+		array_shift($input);
+	}
+
+	// Executing
+	while (1) {
+		if (isset($ip_reg))
+			$registers[$ip_reg] = $ip;
+
+		execute_line($input[$ip], $ip, $registers);
+
+		if (isset($ip_reg)) {
+			$ip = $registers[$ip_reg];
+			if ($ip < 0 || $ip >= count($input))
+				break;
+		}
+		$ip++;
+		if ($ip < 0 || $ip >= count($input))
+			break;
+	}
+	return $registers;
 }
 
-if ($argc < 2 || $argc > 5) {
-	echo "Usage: ".$argv[0]." [-o] [input file] [minutes] [snapshot]\n";
-	echo "Options:\n\t-o Visualize the result.\n";
+if ($argc != 2) {
+	echo "Usage: ".$argv[0]." [file]\n\n";
+	echo "Options:\n";
 	echo "Arguments:\n";
-	echo "\tminutes - The number of minutes to run. (default 10).\n";
-	echo "\tsnapshot- At which minute to take a snapshot of area to use for pattern detection. (default 1000)\n";
+	echo "\tfile - File for input.\n";
 } else {
-	$visualize_result = false;
-	$minutes = 10;
-	$snapshot_at = 1000;
-	$arg = 1;
-
-	if ($argv[$arg] == "-o") {
-		$visualize_result = true;
-		$arg++;
-	}
-	$file = $argv[$arg++];
-	if (isset($argv[$arg]))
-		$minutes = intval($argv[$arg++]);
-	if (isset($argv[$arg]))
-		$snapshot_at = intval($argv[$arg++]);
-
+	$file = $argv[1];
 
 	$input = file_get_contents($file);
-	if (!$input) {
+	if ($input === false)
     	die("Failed to open ".$file."\n");
 
 	echo "Solving...\n";
-	$start = microtime(true);
-
 	// Making sense of input.
 	$input = digest_input($input);
-
-	$result = solve($input, $visualize_result, $minutes, $snapshot_at);
-
-    echo "Done in ".(microtime(true) - $start)." sec.\n";
-  }
+	$result = solve($input);
+	echo "Value of register 0: \e[32m".$result[0]."\e[0m\n";
 }
