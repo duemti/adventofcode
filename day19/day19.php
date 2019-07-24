@@ -69,12 +69,9 @@ function	execute_line($line, &$ip, &$registers)
 	return true;
 }
 
-function	solve($input)
+function	solve($input, $registers)
 {
 	$ip = 0;
-	$registers = [
-		0, 0, 0, 0, 0, 0
-	];
 
 	// Pre-processing
 	if ($input[0][0] == "#ip") {
@@ -86,7 +83,6 @@ function	solve($input)
 	while (1) {
 		if (isset($ip_reg))
 			$registers[$ip_reg] = $ip;
-
 		execute_line($input[$ip], $ip, $registers);
 
 		if (isset($ip_reg)) {
@@ -99,6 +95,48 @@ function	solve($input)
 			break;
 	}
 	return $registers;
+}
+
+function	solve_part_2()
+{
+	$r0 = 1;
+	$r1 = 0;
+	$r2 = 0;
+	$r3 = 0;
+	$r4 = 0;
+	$r5 = 0;
+
+	$r3 += 2;
+	$r3 *= $r3;
+	$r3 *= 19;
+	$r3 *= 11;
+	$r4 += 8;
+	$r4 *= 22;
+	$r4 += 13;
+	$r3 += $r4;
+
+	$r4 = 27;
+	$r4 *= 28;
+	$r4 += 29;
+	$r4 *= 30;
+	$r4 *= 14;
+	$r4 *= 32;
+	$r3 += $r4;
+	$r0 = 0;
+
+	$r1 = 1;
+	while (1) {
+		$r2 = 1;
+		$r4 = $r1 * $r3;
+		if ($r3 % $r1 == 0 && $r3 / $r1 >= $r2)
+			$r0 += $r1;
+		$r2 = $r3 + 1;
+		$r1++;
+		if ($r1 > $r3)
+			break;
+	}
+
+	return [$r0, $r1, $r2, $r3, $r4, 16 * 16];
 }
 
 if ($argc != 2) {
@@ -116,6 +154,10 @@ if ($argc != 2) {
 	echo "Solving...\n";
 	// Making sense of input.
 	$input = digest_input($input);
-	$result = solve($input);
-	echo "Value of register 0: \e[32m".$result[0]."\e[0m\n";
+	$result = solve($input, [0, 0, 0, 0, 0, 0]);
+	echo "Value in register 0: \e[32m".$result[0]."\e[0m\n";
+
+	echo "Starting with value 1 in register 0.\n";
+	$result = solve_part_2();
+	echo "Value in register 0: \e[32m".$result[0]."\e[0m\n";
 }
