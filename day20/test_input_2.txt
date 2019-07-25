@@ -1,8 +1,6 @@
-Regex:
+Test_Regex
 ^ENWWW(NEEE|SSE(EE|N))$
-Result:
 10
-Map:
 #########
 #.|.|.|.#
 #-#######

@@ -1,8 +1,6 @@
-Regex:
+Test_Regex
 ^WSSEESWWWNW(S|NENNEEEENN(ESSSSW(NWSW|SSEN)|WSWWN(E|WWS(E|SS))))$
-Result:
 31
-Map:
 ###############
 #.|.|.|.#.|.|.#
 #-###-###-#-#-#

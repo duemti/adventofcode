@@ -1,8 +1,6 @@
-Regex:
+Test_Regex
 ^WNE$
-Result:
 3
-Map:
 #####
 #.|.#
 #-###
