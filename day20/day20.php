@@ -103,10 +103,7 @@ function	compile_map(&$regex, $step, $x, $y, &$map)
 {
 	$position = [$x, $y];
 	$branches = [];
-
-	display($map);
 	$void = "~";
-	echo "x=".$x.", y=".$y."\n\n";
 
 	while (isset($regex[$step])) {
 		switch ($regex[$step]) {
@@ -143,7 +140,8 @@ function	compile_map(&$regex, $step, $x, $y, &$map)
 
 function	extract_paths($regex, &$i)
 {
-	$paths[] = [];
+	$paths = [[]];
+	$options = [];
 
 	for ( ; $i < count($regex); $i++) {
 		$step = $regex[$i];
@@ -151,21 +149,22 @@ function	extract_paths($regex, &$i)
 		if ($step == "(") {
 			$i++;
 			$opt = extract_paths($regex, $i);
+			$new_paths = [];
+
 			foreach ($paths as $p) {
 				foreach ($opt as $o) {
-					$new_paths[] = $p + $o;
+					$new_paths[] = array_merge($p, $o);
 				}
 			}
 			$paths = $new_paths;
-			print_R($paths);
 		}
 		else if ($step == ")") {
-			$options[] = $paths[0];
+			$options = array_merge($options, $paths);
 			return $options;
 		}
 		else if ($step == "|") {
-			$options[] = $paths[0];
-			$path[] = [];
+			$options = array_merge($options, $paths);
+			$paths = [[]];
 		}
 		else {
 			foreach ($paths as &$p)
@@ -173,6 +172,14 @@ function	extract_paths($regex, &$i)
 		}
 	}
 	return $paths;
+}
+
+function	find_my_location($map)
+{
+	foreach ($map as $y => $row)
+		foreach ($row as $x => $pin)
+			if ($pin == 'X')
+				return [$x, $y];
 }
 
 function	solve($regex)
@@ -188,10 +195,9 @@ function	solve($regex)
 	$paths = extract_paths($regex, $i);
 
 	foreach ($paths as $p) {
-		echo implode($p);
+		list($x, $y) = find_my_location($map);
+		compile_map($p, 0, $x, $y, $map);
 	}
-	die();
-	//compile_map($r, 0, 1, 1, $map);
 
 	foreach ($map as &$row) {
 		$row = array_map(function ($r) {
