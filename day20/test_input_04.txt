@@ -1,6 +1,6 @@
 Test_Regex
 ^E(SS|ESSW)WN$
-00
+5
 #######
 #X|.|.#
 ###-#-#

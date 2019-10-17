@@ -32,11 +32,14 @@ function	map_point(&$point, $to, $matches)
 function	move_west(&$x, &$y, &$map, $void)
 {
 	$map[$y][--$x] = '|';
-	if (--$x < 0) {
-		$x = 1;
+	--$x;
+
+	if (! isset($map[$y][$x])) {
+
 		foreach ($map as &$row) {
-			array_unshift($row, $void);
-			array_unshift($row, $void);
+			$row[$x]		= $void;
+			$row[$x - 1]	= $void;
+			ksort($row);
 		}
 	}
 	map_point($map[$y - 1][$x], '?', $void);
@@ -51,10 +54,13 @@ function	move_west(&$x, &$y, &$map, $void)
 function	move_north(&$x, &$y, &$map, $void)
 {
 	$map[--$y][$x] = '-';
-	if (--$y < 0) {
-		$y = 1;
-		array_unshift($map, array_fill(0, count($map[$y]), $void));
-		array_unshift($map, array_fill(0, count($map[$y]), $void));
+	--$y;
+
+	if (! isset($map[$y])) {
+		$keys = range(array_key_first($map[$y + 1]), array_key_last($map[$y + 1]));
+		$map[$y]		= array_fill_keys($keys, $void);
+		$map[$y - 1]	= array_fill_keys($keys, $void);
+		ksort($map);
 	}
 	map_point($map[$y][$x - 1], '?', $void);
 	map_point($map[$y][$x], '.', $void);
@@ -68,9 +74,12 @@ function	move_north(&$x, &$y, &$map, $void)
 function	move_south(&$x, &$y, &$map, $void)
 {
 	$map[++$y][$x] = '-';
-	if (++$y >= count($map)) {
-		$map[] = array_fill(0, count($map[0]), $void);
-		$map[] = array_fill(0, count($map[0]), $void);
+	++$y;
+
+	if (! isset($map[$y])) {
+		$keys = range(array_key_first($map[$y - 1]), array_key_last($map[$y - 1]));
+		$map[] = array_fill_keys($keys, $void);
+		$map[] = array_fill_keys($keys, $void);
 	}
 	map_point($map[$y][$x - 1], "?", $void);
 	map_point($map[$y][$x], '.', $void);
@@ -84,8 +93,10 @@ function	move_south(&$x, &$y, &$map, $void)
 function	move_east(&$x, &$y, &$map, $void)
 {
 	$map[$y][++$x] = '|';
-	if (++$x >= count($map[$y])) {
-		for ($i = 0; $i < count($map); $i++) {
+	++$x;
+
+	if (! isset($map[$y][$x])) {
+		for ($i = array_key_first($map); $i <= array_key_last($map); $i++) {
 			$map[$i][] = $void;
 			$map[$i][] = $void;
 		}
@@ -99,87 +110,97 @@ function	move_east(&$x, &$y, &$map, $void)
 	$map[$y + 1][$x + 1] = '#';
 }
 
-function	compile_map(&$regex, $step, $x, $y, &$map)
+function	mapping($step, $pos, &$map)
 {
-	$position = [$x, $y];
-	$branches = [];
 	$void = "~";
 
-	while (isset($regex[$step])) {
-		switch ($regex[$step]) {
-			case "S":
-				move_south($x, $y, $map, $void);
-				break;
-			case "E":
-				move_east($x, $y, $map, $void);
-				break;
-			case "N":
-				move_north($x, $y, $map, $void);
-				break;
-			case "W":
-				move_west($x, $y, $map, $void);
-				break;
-
-			case "(":
-				return ['status' => 'branching', 'at' => ['step' => $step, 'x' => $x, 'y' => $y]];
-				break;
-			case ")":
-				$step++;
-				foreach ($branches as &$b)
-					$b['step'] = $step;
-				return ['status' => 'branched', 'branches' => $branches];
-				break;
-			case "|":
-				$branches[] = ['y' => $y, 'x' => $x];
-				list($x, $y) = $position;
-				break;
-		}
-		$step++;
+	switch ($step) {
+		case "S":
+			move_south($pos[0], $pos[1], $map, $void);
+			break;
+		case "E":
+			move_east($pos[0], $pos[1], $map, $void);
+			break;
+		case "N":
+			move_north($pos[0], $pos[1], $map, $void);
+			break;
+		case "W":
+			move_west($pos[0], $pos[1], $map, $void);
+			break;
 	}
+	return $pos;
 }
 
-function	extract_paths($regex, &$i)
+function	extract_paths($regex, &$map, $init_pos, &$i)
 {
-	$paths = [[]];
-	$options = [];
+	$positions = $init_pos;
+	$options_pos = [];
 
 	for ( ; $i < count($regex); $i++) {
 		$step = $regex[$i];
 
-		if ($step == "(") {
+		switch ($step) {
+		case "(":
 			$i++;
-			$opt = extract_paths($regex, $i);
-			$new_paths = [];
-
-			foreach ($paths as $p) {
-				foreach ($opt as $o) {
-					$new_paths[] = array_merge($p, $o);
-				}
+			$positions = array_unique(extract_paths($regex, $map, $positions, $i), SORT_REGULAR);
+			break;
+		case ")":
+			return array_merge($options_pos, $positions);
+		case "|":
+			$options_pos = array_merge($positions, $options_pos);
+			$positions = $init_pos;
+			break;
+		case "N":
+		case "S":
+		case "E":
+		case "W":
+			$pos = [];
+			foreach ($positions as $p) {
+				$pos[] = mapping($step, $p, $map);
 			}
-			$paths = $new_paths;
-		}
-		else if ($step == ")") {
-			$options = array_merge($options, $paths);
-			return $options;
-		}
-		else if ($step == "|") {
-			$options = array_merge($options, $paths);
-			$paths = [[]];
-		}
-		else {
-			foreach ($paths as &$p)
-				$p[] = $step;
+			$positions = $pos;
+			break;
 		}
 	}
-	return $paths;
+	return $init_pos;
 }
 
-function	find_my_location($map)
+function	furthest_room($map)
 {
-	foreach ($map as $y => $row)
-		foreach ($row as $x => $pin)
-			if ($pin == 'X')
-				return [$x, $y];
+	$routes = [["y" => 1, "x" => 1, "d" => 0]];
+	$doors = 0;
+
+	while (1) {
+
+		$new_routes = [];
+		foreach ($routes as $r) {
+			// check north for door
+			if ($map[$r['y'] - 1][$r['x']] == "-") {
+				$new_routes[] = ['y' => $r['y'] - 2, 'x' => $r['x'], 'd' => $r['d'] + 1];
+				$map[$r['y'] - 1][$r['x']] = $r['d'] + 1;
+			}
+			// check south for door
+			if ($map[$r['y'] + 1][$r['x']] == "-") {
+				$new_routes[] = ['y' => $r['y'] + 2, 'x' => $r['x'], 'd' => $r['d'] + 1];
+				$map[$r['y'] + 1][$r['x']] = $r['d'] + 1;
+			}
+			// check west for door
+			if ($map[$r['y']][$r['x'] - 1] == "|") {
+				$new_routes[] = ['y' => $r['y'], 'x' => $r['x'] - 2, 'd' => $r['d'] + 1];
+				$map[$r['y']][$r['x'] - 1] = $r['d'] + 1;
+			}
+			// check east for door
+			if ($map[$r['y']][$r['x'] + 1] == "|") {
+				$new_routes[] = ['y' => $r['y'], 'x' => $r['x'] + 2, 'd' => $r['d'] + 1];
+				$map[$r['y']][$r['x'] + 1] = $r['d'] + 1;
+			}
+		}
+		if (empty($new_routes))
+			break;
+		$routes = $new_routes;
+		$doors++;
+	}
+	return $doors;
 }
 
 function	solve($regex)
@@ -189,15 +210,14 @@ function	solve($regex)
 		['?', 'X', '?'],
 		['#', '?', '#'],
 	];
+	$positions = [
+		[1, 1]
+	];
 	$regex = str_split($regex);
 
 	$i = 0;
-	$paths = extract_paths($regex, $i);
+	extract_paths($regex, $map, $positions, $i);
 
-	foreach ($paths as $p) {
-		list($x, $y) = find_my_location($map);
-		compile_map($p, 0, $x, $y, $map);
-	}
 
 	foreach ($map as &$row) {
 		$row = array_map(function ($r) {
@@ -205,7 +225,12 @@ function	solve($regex)
 		}, $row);
 	}
 
-	return $map;
+	$res = furthest_room($map);
+
+	return [
+		"map" => $map,
+		"res" => (int)$res
+	];
 }
 
 if ($argc != 2)
@@ -219,12 +244,19 @@ $input = digest_input($input);
 
 $result = solve($input['regex']);
 
-display($result);
-foreach ($result as $row)
+display($result["map"]);
+echo "Furthest room is ", $result['res'], " doors away!\n";
+foreach ($result["map"] as $row)
 	$map[] = implode($row);
 if (isset($input['expected_map'])) {
 	if (json_encode($input['expected_map']) === json_encode($map))
 		echo "\e[34mMap matched.\e[0m\n";
 	else
 		echo "\e[31mMap did not matched.\e[0m\n";
+}
+if (isset($input['expected_result'])) {
+	if ($input['expected_result'] == $result["res"])
+		echo $input['expected_result'] , "\e[34m Result matched. ", $result["res"] ,"\e[0m\n";
+	else
+		echo $input['expected_result'] , "\e[31m Result did not matched. ", $result["res"] ,"\e[0m\n";
 }
