@@ -169,6 +169,7 @@ function	furthest_room($map)
 {
 	$routes = [["y" => 1, "x" => 1, "d" => 0]];
 	$doors = 0;
+	$rooms = 0;
 
 	while (1) {
 
@@ -177,22 +178,30 @@ function	furthest_room($map)
 			// check north for door
 			if ($map[$r['y'] - 1][$r['x']] == "-") {
 				$new_routes[] = ['y' => $r['y'] - 2, 'x' => $r['x'], 'd' => $r['d'] + 1];
-				$map[$r['y'] - 1][$r['x']] = $r['d'] + 1;
+				$map[$r['y'] - 1][$r['x']] = $doors;
+				if ($doors >= 999)
+					$rooms++;
 			}
 			// check south for door
 			if ($map[$r['y'] + 1][$r['x']] == "-") {
 				$new_routes[] = ['y' => $r['y'] + 2, 'x' => $r['x'], 'd' => $r['d'] + 1];
-				$map[$r['y'] + 1][$r['x']] = $r['d'] + 1;
+				$map[$r['y'] + 1][$r['x']] = $doors;
+				if ($doors >= 999)
+					$rooms++;
 			}
 			// check west for door
 			if ($map[$r['y']][$r['x'] - 1] == "|") {
 				$new_routes[] = ['y' => $r['y'], 'x' => $r['x'] - 2, 'd' => $r['d'] + 1];
-				$map[$r['y']][$r['x'] - 1] = $r['d'] + 1;
+				$map[$r['y']][$r['x'] - 1] = $doors;
+				if ($doors >= 999)
+					$rooms++;
 			}
 			// check east for door
 			if ($map[$r['y']][$r['x'] + 1] == "|") {
 				$new_routes[] = ['y' => $r['y'], 'x' => $r['x'] + 2, 'd' => $r['d'] + 1];
-				$map[$r['y']][$r['x'] + 1] = $r['d'] + 1;
+				$map[$r['y']][$r['x'] + 1] = $doors;
+				if ($doors >= 999)
+					$rooms++;
 			}
 		}
 		if (empty($new_routes))
@@ -200,7 +209,7 @@ function	furthest_room($map)
 		$routes = $new_routes;
 		$doors++;
 	}
-	return $doors;
+	return ['doors' => $doors, 'rooms' => $rooms];
 }
 
 function	solve($regex)
@@ -229,7 +238,8 @@ function	solve($regex)
 
 	return [
 		"map" => $map,
-		"res" => (int)$res
+		"res" => (int)$res['doors'],
+		"rooms" => (int)$res['rooms']
 	];
 }
 
@@ -246,6 +256,7 @@ $result = solve($input['regex']);
 
 display($result["map"]);
 echo "Furthest room is ", $result['res'], " doors away!\n";
+echo "There are ",$result['rooms']," rooms that have a shortest path from my current location that pass through at least 1000 doors.\n";
 foreach ($result["map"] as $row)
 	$map[] = implode($row);
 if (isset($input['expected_map'])) {
