@@ -1,98 +1,103 @@
 <?PHP
-
-function	get_smallest_distance($cave, &$y, &$x)
-{
-	$y = -1;
-	$x = -1;
-
-	foreach ($cave as $dy => $row) {
-		foreach ($row as $dx => $reg) {
-			if (!$reg['visited'] && (!isset($distance) || $reg['distance'] < $distance)) {
-				$distance = $reg['distance'];
-				$y = $dy;
-				$x = $dx;
-			}
-		}
-	}
-}
+require __DIR__ . '/vendor/autoload.php';
 
 function	visit(&$region, $prev_region)
 {
 	$time = $prev_region['distance'] + 1;
 	$equipped = $prev_region['equipped'];
+	$equip = [];
 
 	switch ($region['type']) {
 		case 2: // narrow
 			if (in_array("torch", $equipped))
-				$equipped = "torch";
-			elseif (in_array("neither", $equipped))
-				$equipped = "neither";
-			else {
-				$equipped = ($prev_region['type'] == 0) ? "torch" : "neither";
+				$equip[] = "torch";
+			if (in_array("neither", $equipped))
+				$equip[] = "neither";
+			if (count($equipped) == 1 && $equipped[0] == "climbing-gear") {
+				$equip[] = ($prev_region['type'] == 0) ? "torch" : "neither";
 				$time += 7;
 			}
 			break;
 		case 1: // wet
 			if (in_array("climbing-gear", $equipped))
-				$equipped = "climbing-gear";
-			elseif (in_array("neither", $equipped))
-				$equipped = "neither";
-			else {
-				$equipped = ($prev_region['type'] == 0) ? "climbing-gear" : "neither";
+				$equip[] = "climbing-gear";
+			if (in_array("neither", $equipped))
+				$equip[] = "neither";
+			if (count($equipped) == 1 && $equipped[0] == "torch") {
+				$equip[] = ($prev_region['type'] == 0) ? "climbing-gear" : "neither";
 				$time += 7;
 			}
 			break;
 		case 0: // rocky
 			if (in_array("torch", $equipped))
-				$equipped = "torch";
-			elseif (in_array("climbing-gear", $equipped))
-				$equipped = "climbing-gear";
-			else {
-				$equipped = ($prev_region['type'] == 1) ? "climbing-gear" : "torch";
+				$equip[] = "torch";
+			if (in_array("climbing-gear", $equipped))
+				$equip[] = "climbing-gear";
+			if (count($equipped) == 1 && $equipped[0] == "neither") {
+				$equip[] = ($prev_region['type'] == 1) ? "climbing-gear" : "torch";
 				$time += 7;
 			}
 			break;
 	}
 
-	if ($time <= $region['distance']) {
+	if ($time < $region['distance']) {
 		$region['distance'] = $time;
-		$region['equipped'][] = $equipped;
-	}
+		$region['equipped'] = $equip;
+		return true;
+	} elseif ($time == $region['distance'])
+		$region['equipped'] = array_unique(array_merge($region['equipped'], $equip));
+	return false;
 }
 
-function	find_fastest_path(&$cave, $target)
+function	heuristic($target, $coor)
 {
+	return (abs($coor['x'] - $target['x']) + abs($coor['y'] - $target['y']));
+}
+
+function	find_fastest_path(&$cave, $target, $depth)
+{
+	$frontier = new Ds\PriorityQueue();
 	$cave[0][0]['distance'] = 0;
 	$cave[0][0]['equipped'] = ["torch"];
-	$y = 0;
-	$x = 0;
 
-	while (1) {
-		get_smallest_distance($cave, $y, $x);
-		if ($y < 0)
+	$frontier->push(['x' => 0, 'y' => 0], 0);
+	while (!$frontier->isEmpty()) {
+		$current = $frontier->pop();
+
+		if ($current == $target)
 			break;
+
+		list('y' => $y, 'x' => $x) = $current;
 		foreach ([
-					[$y - 1, $x],	// ^
-					[$y + 1, $x],	// v
-					[$y, $x + 1],	// >
-					[$y, $x - 1]	// <
+					['y' => $y - 1, 'x' => $x],	// ^
+					['y' => $y + 1, 'x' => $x],	// v
+					['y' => $y, 'x' => $x + 1],	// >
+					['y' => $y, 'x' => $x - 1]	// <
 				] as $coor) {
-			if (!isset($cave[$coor[0]][$coor[1]]))
-				continue ;
-			$reg = &$cave[$coor[0]][$coor[1]];
-			if (!$reg['visited'])
-				visit($reg, $cave[$y][$x]);
+
+			if (!isset($cave[$coor['y']][$coor['x']])) {
+				if ($coor['x'] < 0 || $coor['y'] < 0)
+					continue;
+				detect_terrain_type($cave, $coor['x'], $coor['y'], $target, $depth);
+			}
+
+			if (!$cave[$coor['y']][$coor['x']]['visited']) {
+				if (visit($cave[$coor['y']][$coor['x']], $cave[$y][$x])) {
+					$priority = (heuristic($target, $coor) + $cave[$coor['y']][$coor['x']]['distance']) * -1;
+					$frontier->push($coor, $priority);
+				}
+			}
 		}
 		$cave[$y][$x]['visited'] = true;
 	}
+
 	$t = $cave[$target['y']][$target['x']];
-	print_R($t['equipped']);
 	if (!in_array("torch", $t['equipped']))
 		$t['distance'] += 7;
-	echo "=> ",$t['distance'].PHP_EOL;
+	return $t['distance'];
 }
 
-function	geo_index(array $cave, int $x, int $y, array $target)
+function	geo_index(array &$cave, int $x, int $y, array $target, int $depth)
 {
 	if (($x == 0 && $y == 0) || ($x == $target['x'] && $y == $target['y']))
 		return 0;
@@ -100,26 +105,32 @@ function	geo_index(array $cave, int $x, int $y, array $target)
 		return ($x * 16807);
 	if ($x == 0)
 		return ($y * 48271);
+	if (!isset($cave[$y - 1][$x]))
+		detect_terrain_type($cave, $x, $y - 1, $target, $depth);
+	if (!isset($cave[$y][$x - 1]))
+		detect_terrain_type($cave, $x - 1, $y, $target, $depth);
 	return ($cave[$y - 1][$x]['erosion_lvl'] * $cave[$y][$x - 1]['erosion_lvl']);
 }
 
-function	map_the_cave($depth, $target, $width, $height)
+function	detect_terrain_type(&$cave, $x, $y, $target, $depth)
 {
-	$risk_lvl = 0;
-	$cave = array_fill(0, $target['y'], array_fill(0, $target['x'], ['type' => '?']));
-
-	for ($y = 0; $y <= $height; $y++) {
-		for ($x = 0; $x <= $width; $x++) {
-			$geo_index = geo_index($cave, $x, $y, $target);
+			$geo_index = geo_index($cave, $x, $y, $target, $depth);
 			$cave[$y][$x]['erosion_lvl'] = ($geo_index + $depth) % 20183;
 			$cave[$y][$x]['type'] = $cave[$y][$x]['erosion_lvl'] % 3;
 			$cave[$y][$x]['distance'] = INF;
 			$cave[$y][$x]['visited'] = false;
+			return $cave[$y][$x]['type'];
+}
 
-			$risk_lvl += $cave[$y][$x]['type'];
-			echo ($cave[$y][$x]['type'] == 2) ? '|' : (($cave[$y][$x]['type']) ? '=' : '.');
+function	map_the_cave($depth, $target)
+{
+	$risk_lvl = 0;
+	$cave = array_fill(0, $target['y'], array_fill(0, $target['x'], ['type' => '?']));
+
+	for ($y = 0; $y <= $target['y']; $y++) {
+		for ($x = 0; $x <= $target['x']; $x++) {
+			$risk_lvl += detect_terrain_type($cave, $x, $y, $target, $depth);
 		}
-		echo PHP_EOL;
 	}
 	return ["risk-lvl" => $risk_lvl, "cave" => $cave];
 }
@@ -134,16 +145,10 @@ function	solve($input)
 	$depth = intval($match[1]);
 	$target = ['x' => intval($match[2]), 'y' => intval($match[3])];
 
-	$cave = map_the_cave($depth, $target, $target['x'] + 20, $target['y'] + 20);
-	find_fastest_path($cave['cave'], $target);
+	$cave = map_the_cave($depth, $target);
+	$path = find_fastest_path($cave['cave'], $target, $depth);
 
-	foreach ($cave['cave'] as $row) {
-		foreach ($row as $r)
-			echo $r['distance']," ";
-		echo PHP_EOL;
-	}
-
-	return $cave['risk-lvl'];
+	return ["risk-lvl" => $cave['risk-lvl'], "time" => $path];
 }
 
 // Main entry into the program.
@@ -152,7 +157,7 @@ if ($argc != 2) {
 	echo "Options:\n";
 	echo "Arguments:\n";
 	echo "\tfile - File for input.\n";
-	return ;
+	return 1;
 }
 
 $file = $argv[1];
@@ -164,4 +169,5 @@ if ($input === false)
 echo "Solving...\n";
 // Solving...
 $result = solve($input);
-echo "Risk level is ", $result, PHP_EOL;
+echo "Risk level is ", $result['risk-lvl'], PHP_EOL;
+echo "Minimum time ", $result['time'], PHP_EOL;
