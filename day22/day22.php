@@ -1,52 +1,71 @@
 <?PHP
 require __DIR__ . '/vendor/autoload.php';
+define('ROCKY', 0);
+define('WET', 1);
+define('NARROW', 2);
+define('TORCH', 'torch');
+define('GEAR', 'gear');
+define('NEITHER', 'neither');
 
-function	visit(&$region, $prev_region)
+error_reporting(-1);
+
+function	cost($current, $next)
 {
-	$time = $prev_region['distance'] + 1;
-	$equipped = $prev_region['equipped'];
-	$equip = [];
+	$gear = INF;
+	$neither = INF;
+	$torch = INF;
 
-	switch ($region['type']) {
-		case 2: // narrow
-			if (in_array("torch", $equipped))
-				$equip[] = "torch";
-			if (in_array("neither", $equipped))
-				$equip[] = "neither";
-			if (count($equipped) == 1 && $equipped[0] == "climbing-gear") {
-				$equip[] = ($prev_region['type'] == 0) ? "torch" : "neither";
-				$time += 7;
+	switch ($next['type']) {
+		case ROCKY:
+			switch ($current['type']) {
+				case ROCKY:
+					$gear = $current[GEAR] + 1;
+					$torch = $current[TORCH] + 1;
+					break;
+				case WET:
+					$gear = ($current[GEAR] < $current[NEITHER] + 7) ? ($current[GEAR] + 1) : ($current[NEITHER] + 8);
+					$torch = $gear + 7;
+					break;
+				case NARROW:
+					$torch = ($current[TORCH] > $current[NEITHER] + 7) ? ($current[NEITHER] + 8) : ($current[TORCH] + 1);
+					$gear = $torch + 7;
+					break;
 			}
 			break;
-		case 1: // wet
-			if (in_array("climbing-gear", $equipped))
-				$equip[] = "climbing-gear";
-			if (in_array("neither", $equipped))
-				$equip[] = "neither";
-			if (count($equipped) == 1 && $equipped[0] == "torch") {
-				$equip[] = ($prev_region['type'] == 0) ? "climbing-gear" : "neither";
-				$time += 7;
+		case WET:
+			switch ($current['type']) {
+				case ROCKY:
+					$gear = ($current[GEAR] > $current[TORCH] + 7) ? ($current[TORCH] + 8) : ($current[GEAR] + 1);
+					$neither = $gear + 7;
+					break;
+				case WET:
+					$gear = $current[GEAR] + 1;
+					$neither = $current[NEITHER] + 1;
+					break;
+				case NARROW:
+					$neither = ($current[NEITHER] > $current[TORCH] + 7) ? ($current[TORCH] + 8) : ($current[NEITHER] + 1);
+					$gear = $neither + 7;
+					break;
 			}
 			break;
-		case 0: // rocky
-			if (in_array("torch", $equipped))
-				$equip[] = "torch";
-			if (in_array("climbing-gear", $equipped))
-				$equip[] = "climbing-gear";
-			if (count($equipped) == 1 && $equipped[0] == "neither") {
-				$equip[] = ($prev_region['type'] == 1) ? "climbing-gear" : "torch";
-				$time += 7;
+		case NARROW:
+			switch ($current['type']) {
+				case ROCKY:
+					$torch = ($current[GEAR] + 7 > $current[TORCH]) ? ($current[TORCH] + 1) : ($current[GEAR] + 8);
+					$neither = $torch + 7;
+					break;
+				case WET:
+					$neither = ($current[GEAR] + 7 > $current[NEITHER]) ? ($current[NEITHER] + 1) : ($current[GEAR] + 8);
+					$torch = $neither + 7;
+					break;
+				case NARROW:
+					$torch = $current[TORCH] + 1;
+					$neither = $current[NEITHER] + 1;
+					break;
 			}
 			break;
 	}
-
-	if ($time < $region['distance']) {
-		$region['distance'] = $time;
-		$region['equipped'] = $equip;
-		return true;
-	} elseif ($time == $region['distance'])
-		$region['equipped'] = array_unique(array_merge($region['equipped'], $equip));
-	return false;
+	return [GEAR => $gear, TORCH => $torch, NEITHER => $neither];
 }
 
 function	heuristic($target, $coor)
@@ -54,13 +73,17 @@ function	heuristic($target, $coor)
 	return (abs($coor['x'] - $target['x']) + abs($coor['y'] - $target['y']));
 }
 
-function	find_fastest_path(&$cave, $target, $depth)
+function	find_fastest_path(&$cave, $start, $target, $depth)
 {
 	$frontier = new Ds\PriorityQueue();
+	$cost_so_far = [];
+	$cave[0][0][TORCH] = 0;
+	$cave[0][0][GEAR] = 7;
+	$cave[0][0][NEITHER] = INF;
 	$cave[0][0]['distance'] = 0;
-	$cave[0][0]['equipped'] = ["torch"];
 
-	$frontier->push(['x' => 0, 'y' => 0], 0);
+foreach ($cave as $row)
+	$frontier->push($start, 0);
 	while (!$frontier->isEmpty()) {
 		$current = $frontier->pop();
 
@@ -68,6 +91,7 @@ function	find_fastest_path(&$cave, $target, $depth)
 			break;
 
 		list('y' => $y, 'x' => $x) = $current;
+		$current = &$cave[$y][$x];
 		foreach ([
 					['y' => $y - 1, 'x' => $x],	// ^
 					['y' => $y + 1, 'x' => $x],	// v
@@ -80,24 +104,24 @@ function	find_fastest_path(&$cave, $target, $depth)
 					continue;
 				detect_terrain_type($cave, $coor['x'], $coor['y'], $target, $depth);
 			}
+			$next = &$cave[$coor['y']][$coor['x']];
+			$new_cost = cost($current, $next);
 
-			if (!$cave[$coor['y']][$coor['x']]['visited']) {
-				if (visit($cave[$coor['y']][$coor['x']], $cave[$y][$x])) {
-					$priority = (heuristic($target, $coor) + $cave[$coor['y']][$coor['x']]['distance']) * -1;
+			foreach ([GEAR, TORCH, NEITHER] as $tool) {
+				if ($new_cost[$tool] < $next[$tool]) {
+					$next[$tool] = $new_cost[$tool];
+					$priority = (heuristic($target, $coor) + $new_cost[$tool]) * -1;
 					$frontier->push($coor, $priority);
 				}
 			}
+			unset($next);
 		}
-		$cave[$y][$x]['visited'] = true;
+		unset($current);
 	}
-
-	$t = $cave[$target['y']][$target['x']];
-	if (!in_array("torch", $t['equipped']))
-		$t['distance'] += 7;
-	return $t['distance'];
+	return $cave[$target['y']][$target['x']][TORCH];
 }
 
-function	geo_index(array &$cave, int $x, int $y, array $target, int $depth)
+function	geo_index(array &$cave, int $x, int $y, array $target, int $depth): int
 {
 	if (($x == 0 && $y == 0) || ($x == $target['x'] && $y == $target['y']))
 		return 0;
@@ -112,24 +136,25 @@ function	geo_index(array &$cave, int $x, int $y, array $target, int $depth)
 	return ($cave[$y - 1][$x]['erosion_lvl'] * $cave[$y][$x - 1]['erosion_lvl']);
 }
 
-function	detect_terrain_type(&$cave, $x, $y, $target, $depth)
+function	detect_terrain_type(array &$cave, int $x, int $y, array $target, int $depth): void
 {
 			$geo_index = geo_index($cave, $x, $y, $target, $depth);
 			$cave[$y][$x]['erosion_lvl'] = ($geo_index + $depth) % 20183;
 			$cave[$y][$x]['type'] = $cave[$y][$x]['erosion_lvl'] % 3;
-			$cave[$y][$x]['distance'] = INF;
-			$cave[$y][$x]['visited'] = false;
-			return $cave[$y][$x]['type'];
+			$cave[$y][$x][TORCH] = INF;
+			$cave[$y][$x][GEAR] = INF;
+			$cave[$y][$x][NEITHER] = INF;
 }
 
 function	map_the_cave($depth, $target)
 {
 	$risk_lvl = 0;
-	$cave = array_fill(0, $target['y'], array_fill(0, $target['x'], ['type' => '?']));
+	$cave = array_fill(0, $target['y'], array_fill(0, $target['x'], []));
 
 	for ($y = 0; $y <= $target['y']; $y++) {
 		for ($x = 0; $x <= $target['x']; $x++) {
-			$risk_lvl += detect_terrain_type($cave, $x, $y, $target, $depth);
+			detect_terrain_type($cave, $x, $y, $target, $depth);
+			$risk_lvl += $cave[$y][$x]['type'];
 		}
 	}
 	return ["risk-lvl" => $risk_lvl, "cave" => $cave];
@@ -146,7 +171,8 @@ function	solve($input)
 	$target = ['x' => intval($match[2]), 'y' => intval($match[3])];
 
 	$cave = map_the_cave($depth, $target);
-	$path = find_fastest_path($cave['cave'], $target, $depth);
+	$start = ['y' => 0, 'x' => 0];
+	$path = find_fastest_path($cave['cave'], $start, $target, $depth);
 
 	return ["risk-lvl" => $cave['risk-lvl'], "time" => $path];
 }
