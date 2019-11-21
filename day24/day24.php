@@ -57,7 +57,7 @@ function	solve_first($army)
 function	solve_second($army)
 {
 	$battle = new Battle();
-	$boostBy = 10000;
+	$boostBy = 10;
 	$boost = 0;
 
 	while (true)
@@ -65,25 +65,23 @@ function	solve_second($army)
 		$battle->createArmies($army['Immune System:'], $army['Infection:']);
 		$boost += $boostBy;
 		$battle->boost('immuneSystem', $boost);
-		$result = $battle->perform();
-		if ($result['winner'] === 'draw')
-			echo "draw";
+		$result = $battle->finishWar();
 		if ($result['winner'] === 'immuneSystem')
 		{
 			if ($boostBy != 1)
-				$boost = ($boost - $boostBy) - ($boostBy = (int) ($boostBy / 2));
+				$boost = ($boost - $boostBy) - ($boostBy = (int) ($boostBy / 10));
 			else
 				break ;
 		}
 	}
-	return "Immune System:\t\e[32m". $result['immuneSystem']. "\e[32m\n"
+	return "Immune System:\t\e[32m". $result['immuneSystem']. "\e[0m\n"
 		."Infection:\t\e[32m". $result['infection']. "\e[0m with ". $boost. " boost.";
 }
 
 function	solve($input)
 {
 	echo solve_first($input).PHP_EOL;
-	//echo solve_second($input).PHP_EOL;
+	echo solve_second($input).PHP_EOL;
 }
 
 $input = file_get_contents($argv[1]);

@@ -27,9 +27,8 @@ class Battle
 	{
 		while ($this->immuneSystem && $this->infection)
 		{
-			if (!$this->targetSelection())
-				return ;
-			$this->attack();
+			if (false === $this->targetSelection() || 0 === $this->attack())
+				break ;
 		}
 		return $this->returnTotalUnits();
 	}
@@ -46,7 +45,7 @@ class Battle
 			$total['immuneSystem'] += $group['units'];
 		foreach ($this->infection as $group)
 			$total['infection'] += $group['units'];
-		if ($total['infection'] !== $total['immuneSystem'])
+		if ($total['infection'] === 0 || 0 === $total['immuneSystem'])
 			$total['winner'] = $total['infection'] > $total['immuneSystem'] ? 'infection' : 'immuneSystem';
 		return $total;
 	}
@@ -54,6 +53,7 @@ class Battle
 	protected function	findTarget($attackingArmy, $defendingArmy, $key): bool
 	{
 		$group = &$this->$attackingArmy[$key];
+		$group['target'] = null;
 
 		foreach ($this->$defendingArmy as $k => $t)
 		{
@@ -69,8 +69,10 @@ class Battle
 				$damage *= 2;
 				$double = true;
 			}
+			//if ($damage < $t['hit-points'])
+			//	continue;
 
-			if (!$group['target'] || $group['target']['damage'] < $damage)
+			if (null === $group['target'] || $group['target']['damage'] < $damage)
 			{
 				$group['target'] = ['target-key' => $k, 'damage' => $damage, 'double' => $double];
 			}
@@ -97,62 +99,56 @@ class Battle
 		$this->setPowerResetTarget('immuneSystem');
 		$this->setPowerResetTarget('infection');
 
-		return $this->targetSelectionHelper('immuneSystem', 'infection')
-			|| $this->targetSelectionHelper('infection', 'immuneSystem');
+		$one = $this->targetSelectionHelper('immuneSystem', 'infection');
+		$two = $this->targetSelectionHelper('infection', 'immuneSystem');
+		return ($one || $two);
 	}
 
 	private function	targetSelectionHelper($attacker, $defender)
 	{
 		$didFindTarget = false;
 		$army = $this->$attacker;
+		usort($army, function ($a, $b) {
+			$e = $b['epower'] - $a['epower'];
+			if ($e === 0)
+				$e = $b['initiative'] - $a['initiative'];
+			return $e;
+		});
 
-		while ($army)
+		for ($id = 0; isset($army[$id]); $id++)
 		{
-			$key = $this->getKey($army);
-			if ($this->findTarget($attacker, $defender, $key))
+			if ($this->findTarget($attacker, $defender, $army[$id]['id']))
 				$didFindTarget = true;
-			unset($army[$key]);
+			unset($army[$id]);
 		}
 		return $didFindTarget;
 	}
 
-	public function		attack()
+	public function		attack(): int
 	{
+		$totalDamageDone = 0;
 		$armies = array_merge($this->immuneSystem, $this->infection);
 
 		usort($armies, function ($a, $b) {
 			return $b['initiative'] - $a['initiative'];
 		});
 
-		for ($i = 0; $i < count($armies); $i++)
+		foreach ($armies as $id => $army)
 		{
-			$attackerGroup = $armies[$i]['group'];
-			$attackerId = $armies[$i]['id'];
-			if (!isset($this->$attackerGroup[$attackerId]) || !$this->$attackerGroup[$attackerId]['target'])
+			$attackerGroup = $army['group'];
+			$attackerId = $army['id'];
+			if (!isset($this->$attackerGroup[$attackerId])
+				|| !$this->$attackerGroup[$attackerId]['target'])
 				continue;
 			$attacker = $this->$attackerGroup[$attackerId];
 			$defender = $attacker['group'] === "infection" ? 'immuneSystem' : 'infection';
 			$key = $attacker['target']['target-key'];
 			$damage = (int) ($attacker['units'] * $attacker['attack'] * ($attacker['target']['double'] ? 2 : 1) / $this->$defender[$key]['hit-points']);
-
 			if (0 >= ($this->$defender[$key]['units'] -= $damage))
 				unset($this->$defender[$key]);
+			$totalDamageDone += $damage;
 		}
-	}
-
-	protected function	getKey($army, $step = 0)
-	{
-		$ret = null;
-
-		foreach ($army as $key => $group)
-		{
-			if ($group['epower'] > $step)
-			{
-				$step = $group['epower'];
-				$ret = $key;
-			}
-		}
-		return $ret;
+		return $totalDamageDone;
 	}
 
 	protected function	setPowerResetTarget($army)
