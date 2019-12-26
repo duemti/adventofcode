@@ -5,6 +5,7 @@ class	IntcodeProcessor
 	private $ip = 0;
 	private $program = null;
 	private $memory = null;
+	private $output = [];
 
 	/**
 	 * How the parameters should be interpreted.
@@ -40,8 +41,7 @@ class	IntcodeProcessor
 		while (1)
 		{
 			$opcode = strval($this->memory[$this->ip]);
-	echo "[$opcode]\n";
-			$param_modes = str_split(substr($opcode, 0, -2));
+			$param_modes = array_reverse(array_map('intval', str_split(substr($opcode, 0, -2))));
 			switch (intval(substr($opcode, -2)))
 			{
 				// Intcode Opcodes.
@@ -90,7 +90,7 @@ class	IntcodeProcessor
 			echo "\e[31mError:\e[0m [$user_input] - Not an integer.\n";
 		}
 		// Position Mode parameter.
-		$address = $this->getFromMemory($this->getFromMemory($address));
+		$address = $this->getFromMemory($address);
 		$this->insertInMemory($address, intval($user_input));
 	}
 
@@ -98,7 +98,9 @@ class	IntcodeProcessor
 	{
 		if (!isset($param_modes[0]) || $param_modes[0] === 0)
 			$address = $this->getFromMemory($address);
-		echo strval($this->getFromMemory($address));
+		$output = strval($this->getFromMemory($address));
+		$this->output[] = $output;
+		echo $output;
 	}
 
 	private function	mult(int $addr, array $param_modes)
@@ -109,7 +111,8 @@ class	IntcodeProcessor
 		$b = $this->getFromMemory($addr + 2);
 		if (!isset($param_modes[1]) || $param_modes[1] === 0)
 			$b = $this->getFromMemory($b);
-		$c = $this->getFromMemory($this->getFromMemory($addr + 3));
+		// Position Mode.
+		$c = $this->getFromMemory($addr + 3);
 		$this->insertInMemory($c, $a * $b);
 	}
 
@@ -121,13 +124,14 @@ class	IntcodeProcessor
 		$b = $this->getFromMemory($addr + 2);
 		if (!isset($param_modes[1]) || $param_modes[1] === 0)
 			$b = $this->getFromMemory($b);
-		$c = $this->getFromMemory($this->getFromMemory($addr + 3));
+		// Position Mode.
+		$c = $this->getFromMemory($addr + 3);
 		$this->insertInMemory($c, $a + $b);
 	}
 
 	private function	halt()
 	{
 		//file_put_contents('output.txt', implode(",", $this->memory));
-		return $this->memory[0];
+		return $this->output;
 	}
 }
