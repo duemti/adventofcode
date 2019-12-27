@@ -44,34 +44,90 @@ class	IntcodeProcessor
 			$param_modes = array_reverse(array_map('intval', str_split(substr($opcode, 0, -2))));
 			switch (intval(substr($opcode, -2)))
 			{
-				// Intcode Opcodes.
 				case 1: // Addition opcode.
-					$this->add($this->ip, $param_modes);
-					$this->ip += 4;
+					$this->add($param_modes);
 					break;
 				case 2: // Multiplication opcode.
-					$this->mult($this->ip, $param_modes);
-					$this->ip += 4;
+					$this->mult($param_modes);
 					break;
 				case 3: // Opcode for requesting single integer.
-					$this->getIntegerInput($this->ip + 1, $param_modes);
-					$this->ip += 2;
+					$this->getIntegerInput();
 					break;
 				case 4: // Opcode for outputing value at.
-					$this->printFromMemory($this->ip + 1, $param_modes);
-					$this->ip += 2;
+					$this->printFromMemory($param_modes);
+					break;
+				case 5:
+					$this->jumpIfTrue($param_modes);
+					break;
+				case 6:
+					$this->jumpIfFalse($param_modes);
+					break;
+				case 7:
+					$this->lessThan($param_modes);
+					break;
+				case 8:
+					$this->equals($param_modes);
 					break;
 				case 99:
 					return $this->halt();
 				default:
-					die("\e[31mError:\e[0m Invalid opcode: [". $opcode."]\n");
+					die("\e[31mError:\e[0m Invalid opcode: [". $opcode."] at [".$this->ip."]\n");
 			}
 		}
 	}
 
-	private function	getFromMemory(int $address)
+	private function	equals(array $pmode)
 	{
-		return intval($this->memory[$address]);
+		$pmode[0] = isset($pmode[0]) ? $pmode[0] : 0;
+		$pmode[1] = isset($pmode[1]) ? $pmode[1] : 0;
+		$a = $this->getFromMemory($this->ip + 1, $pmode[0]);
+		$b = $this->getFromMemory($this->ip + 2, $pmode[1]);
+		$c = $this->getFromMemory($this->ip + 3, 1);
+		$this->insertInMemory($c, $a === $b ? 1 : 0);
+		$this->ip += 4;
+	}
+
+	private function	lessThan(array $pmode)
+	{
+		$pmode[0] = isset($pmode[0]) ? $pmode[0] : 0;
+		$pmode[1] = isset($pmode[1]) ? $pmode[1] : 0;
+
+		$this->insertInMemory(
+			$this->getFromMemory($this->ip + 3, 1),
+			$this->getFromMemory($this->ip + 1, $pmode[0])
+			<
+			$this->getFromMemory($this->ip + 2, $pmode[1])
+			? 1 : 0
+		);
+		$this->ip += 4;
+	}
+
+	private function	jumpIfFalse(array $pmode)
+	{
+		$pmode[0] = isset($pmode[0]) ? $pmode[0] : 0;
+		$pmode[1] = isset($pmode[1]) ? $pmode[1] : 0;
+		
+		if ($this->getFromMemory($this->ip + 1, $pmode[0]) === 0)
+			$this->ip = $this->getFromMemory($this->ip + 2, $pmode[1]);
+		else
+			$this->ip += 3;
+	}
+
+	private function	jumpIfTrue(array $pmode)
+	{
+		$pmode[0] = isset($pmode[0]) ? $pmode[0] : 0;
+		$pmode[1] = isset($pmode[1]) ? $pmode[1] : 0;
+
+		if ($this->getFromMemory($this->ip + 1, $pmode[0]))
+			$this->ip = $this->getFromMemory($this->ip + 2, $pmode[1]);
+		else
+			$this->ip += 3;
+	}
+
+	private function	getFromMemory(int $address, int $mode = 0)
+	{
+		$value = intval($this->memory[$address]);
+		return ($mode === 0 ? intval($this->memory[$value]) : $value);
 	}
 
 	private function	insertInMemory(int $address, int $value)
@@ -80,53 +136,52 @@ class	IntcodeProcessor
 	}
 
 	// Request an integer input from the user and stores it at $address in memmory.
-	private function	getIntegerInput(int $address, array $param_modes)
+	private function	getIntegerInput()
 	{
-		while (1)
-		{
-			$user_input = readline("Input (integer): ");
-			if (is_numeric($user_input))
-				break;
+		while (!is_numeric($user_input = readline("Input (integer): ")))
 			echo "\e[31mError:\e[0m [$user_input] - Not an integer.\n";
-		}
+
 		// Position Mode parameter.
-		$address = $this->getFromMemory($address);
-		$this->insertInMemory($address, intval($user_input));
+		$this->insertInMemory(
+			$this->getFromMemory($this->ip + 1, 1),
+			intval($user_input)
+		);
+		$this->ip += 2;
 	}
 
-	private function	printFromMemory(int $address, array $param_modes)
+	private function	printFromMemory(array $pmode)
 	{
-		if (!isset($param_modes[0]) || $param_modes[0] === 0)
-			$address = $this->getFromMemory($address);
-		$output = strval($this->getFromMemory($address));
+		$pmode[0] = isset($pmode[0]) ? $pmode[0] : 0;
+		$output = strval($this->getFromMemory($this->ip + 1, $pmode[0]));
 		$this->output[] = $output;
 		echo $output;
+		$this->ip += 2;
 	}
 
-	private function	mult(int $addr, array $param_modes)
+	private function	mult(array $pmode)
 	{
-		$a = $this->getFromMemory($addr + 1);
-		if (!isset($param_modes[0]) || $param_modes[0] === 0)
-			$a = $this->getFromMemory($a);
-		$b = $this->getFromMemory($addr + 2);
-		if (!isset($param_modes[1]) || $param_modes[1] === 0)
-			$b = $this->getFromMemory($b);
-		// Position Mode.
-		$c = $this->getFromMemory($addr + 3);
-		$this->insertInMemory($c, $a * $b);
+		$pmode[0] = isset($pmode[0]) ? $pmode[0] : 0;
+		$pmode[1] = isset($pmode[1]) ? $pmode[1] : 0;
+
+		$this->insertInMemory(
+			$this->getFromMemory($this->ip + 3, 1),
+			$this->getFromMemory($this->ip + 1, $pmode[0]) *
+			$this->getFromMemory($this->ip + 2, $pmode[1])
+		);
+		$this->ip += 4;
 	}
 
-	private function	add($addr, $param_modes)
+	private function	add(array $pmode)
 	{
-		$a = $this->getFromMemory($addr + 1);
-		if (!isset($param_modes[0]) || $param_modes[0] === 0)
-			$a = $this->getFromMemory($a);
-		$b = $this->getFromMemory($addr + 2);
-		if (!isset($param_modes[1]) || $param_modes[1] === 0)
-			$b = $this->getFromMemory($b);
-		// Position Mode.
-		$c = $this->getFromMemory($addr + 3);
-		$this->insertInMemory($c, $a + $b);
+		$pmode[0] = isset($pmode[0]) ? $pmode[0] : 0;
+		$pmode[1] = isset($pmode[1]) ? $pmode[1] : 0;
+
+		$this->insertInMemory(
+			$this->getFromMemory($this->ip + 3, 1),
+			$this->getFromMemory($this->ip + 1, $pmode[0]) +
+			$this->getFromMemory($this->ip + 2, $pmode[1])
+		);
+		$this->ip += 4;
 	}
 
 	private function	halt()
