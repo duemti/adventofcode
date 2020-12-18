@@ -1,0 +1,3 @@
+PUZZLE={2 * 3 + (4 * 5)}
+PART_ONE={26}
+PART_TWO={46}
