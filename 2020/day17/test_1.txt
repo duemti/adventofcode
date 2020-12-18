@@ -1,0 +1,5 @@
+PUZZLE={.#.
+..#
+###}
+PART_ONE={112}
+PART_TWO={848}
