@@ -1,0 +1,7 @@
+PUZZLE={0: 1 | 2
+1: "a"
+2: "b"
+
+a}
+PART_ONE={1}
+PART_TWO={1}

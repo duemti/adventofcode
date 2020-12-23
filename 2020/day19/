@@ -1,0 +1,133 @@
+<?PHP
+
+require_once __DIR__."/test.php";
+
+$file = isset($argv[1]) ? $argv[1] : "./puzzle.txt";
+
+// Run tests...
+if (in_array("-t", $argv))
+	run_tests();
+
+if (FALSE === file_exists($file))
+	die("Error: There is no input puzzle file or file doesn't exist.\n");
+$puzzle = read(file_get_contents($file));
+
+echo "Part 1: \e[32m", part_one($puzzle), "\e[0m\n";
+echo "Part 2: \e[32m", part_two($puzzle), "\e[0m\n";
+
+function	part_one(array $puzzle): int
+{
+	$count = 0;
+	$rules = cnf($puzzle['rules']);
+
+	foreach ($puzzle['msgs'] as $msg)
+		$count += validate($msg, $rules);
+	return $count;
+}
+
+function	validate(array $msg, array $rules): int
+{
+	$grid = [];
+	print_R($rules);
+
+	// Step 1
+	foreach ($msg as $k => $ch)
+		$grid[0][] = [search_rules("\"$ch\"", $rules)];
+
+	// Step 2
+	for ($y = 1; $y < count($grid[0]); $y++)
+	{
+		for ($x = 0; $x < count($grid[$y - 1]) - 1; $x++)
+		{
+			$grid[$y][$x] = [];
+
+			check($x, $y, $grid, $rules);
+		}
+	}
+
+	return in_array(0, $grid[count($grid) - 1][0]) ? 1 : 0;
+}
+
+// Chomsky normal form
+function	cnf(array $rules): array
+{
+	// Step 1: i believe there is no '0' on right side.
+	// Step 2: also there are no null's.
+	// Step 3: also skip
+	// Step 4: Replace productions on right side where are more than 2.
+	for ($k = 0; $k < count($rules); $k++)
+	{
+		foreach (array_keys($rules[$k]) as $rhs)
+		{
+			if (count($rules[$k][$rhs]) <= 2)
+				continue;
+			$pos = max(array_keys($rules)) + 1;
+			$rules[$pos][] = array_slice($rules[$k][$rhs], 0, 2);
+			$rules[$k][$rhs] = array_merge(["$pos"], array_slice($rules[$k][$rhs], 2));
+			$k = -1;
+			break;
+		}
+	}
+	foreach (array_keys($rules) as $r)
+		foreach (array_keys($rules[$r]) as $rn)
+			$rules[$r][$rn] = implode(" ", $rules[$r][$rn]);
+	return $rules;
+}
+
+function	check(int $x, int $y, array &$grid, array $rules)
+{
+	$i = 0;
+	$j = $y - 1;
+
+	while ($i < $y)
+	{
+		$l_cell = $grid[$i++][$x];
+		$r_cell = $grid[$j--][$x + $i];
+
+		if (!count($l_cell) || !count($r_cell))
+			continue;
+
+		foreach ($l_cell as $lc)
+		{
+			foreach ($r_cell as $rc)
+			{
+				$res = search_rules("$lc $rc", $rules);
+				if ($res >= 0)
+					$grid[$y][$x][] = $res;
+			}
+		}
+	}
+}
+
+function	search_rules(string $str, array $rules): int
+{
+	foreach ($rules as $r => $rule)
+		if (in_array($str, $rule) !== false)
+			return $r;
+	return -1;
+}
+
+function	part_two(array $puzzle): int
+{
+	return -1;
+}
+
+function	read(string $file): array
+{
+	$puzz = array_filter(explode("\n\n", $file));
+	return ['rules' => parse(array_filter(explode("\n", $puzz[0]))), 'msgs' => array_map('str_split', array_filter(explode("\n", $puzz[1])))];
+}
+
+function	parse(array $rules): array
+{
+	$new_r = [];
+
+	foreach ($rules as $rule)
+	{
+		$m = [];
+		preg_match("/^(\d+): (.+)$/", $rule, $m);
+		foreach (array_filter(explode(" | ", $m[2])) as $r)
+			$new_r[intval($m[1])][] = array_filter(explode(" ", $r));
+	}
+	return $new_r;
+}
