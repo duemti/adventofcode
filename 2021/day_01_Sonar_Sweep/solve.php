@@ -43,5 +43,5 @@ function	part_two(array $data): int
 
 	for ($i = 2; $i < count($data); $i++)
 		$window[] = $data[ $i - 2 ] + $data[ $i - 1] + $data[ $i ];
-	return part_one($window);;
+	return part_one($window);
 }
