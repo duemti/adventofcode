@@ -31,104 +31,65 @@ echo PHP_EOL;
 /**
  * Product of the two group sizes after cutting exactly three wires.
  *
- * Each attempt is one run of Karger's algorithm: contract a random edge
- * until two supernodes remain. Stop at the first cut of size 3. 200 attempts
- * is the hard cap.
+ * Grow one group by always pulling in the outside component with the most
+ * wires already into the group. The loop adds each component at most once.
+ * The first time exactly three wires leave the group, that split is the cut.
  *
  * @param  list<array{0: int, 1: int}>  $edges
  */
 function snowverload(array $edges, int $componentCount): int
 {
-    for ($attempt = 0; $attempt < 200; $attempt++) {
-        [$cut, $product] = contractOnce($edges, $componentCount);
+    $neighbors = array_fill(0, $componentCount, []);
 
+    foreach ($edges as [$left, $right]) {
+        $neighbors[$left][] = $right;
+        $neighbors[$right][] = $left;
+    }
+
+    $inside = array_fill(0, $componentCount, false);
+    $inside[0] = true;
+    $links = array_fill(0, $componentCount, 0);
+
+    foreach ($neighbors[0] as $neighbor) {
+        $links[$neighbor] = 1;
+    }
+
+    $cut = count($neighbors[0]);
+    $insideCount = 1;
+
+    while ($insideCount < $componentCount) {
         if ($cut === 3) {
-            return $product;
+            return $insideCount * ($componentCount - $insideCount);
+        }
+
+        $next = -1;
+        $nextLinks = -1;
+
+        for ($component = 1; $component < $componentCount; $component++) {
+            if ($inside[$component] || $links[$component] <= $nextLinks) {
+                continue;
+            }
+
+            $next = $component;
+            $nextLinks = $links[$component];
+        }
+
+        if ($next < 0) {
+            break;
+        }
+
+        $inside[$next] = true;
+        $insideCount++;
+        $cut += count($neighbors[$next]) - (2 * $nextLinks);
+
+        foreach ($neighbors[$next] as $neighbor) {
+            if (! $inside[$neighbor]) {
+                $links[$neighbor]++;
+            }
         }
     }
 
-    throw new RuntimeException('No 3-wire cut found in 200 Karger attempts.');
-}
-
-/**
- * Contract random edges until two supernodes remain.
- *
- * Edges are sampled uniformly. A sampled edge whose ends already lie in the
- * same supernode is a self-loop and is discarded. Surviving edges are merged
- * with union-find. The cut size is the number of original edges that still
- * cross the two supernodes.
- *
- * @param  list<array{0: int, 1: int}>  $edges
- * @return array{0: int, 1: int}
- */
-function contractOnce(array $edges, int $componentCount): array
-{
-    $parent = range(0, $componentCount - 1);
-    $size = array_fill(0, $componentCount, 1);
-    $pool = $edges;
-    $poolCount = count($pool);
-    $components = $componentCount;
-
-    while ($components > 2 && $poolCount > 0) {
-        $index = mt_rand(0, $poolCount - 1);
-        $left = find($parent, $pool[$index][0]);
-        $right = find($parent, $pool[$index][1]);
-
-        if ($left === $right) {
-            $poolCount--;
-            $pool[$index] = $pool[$poolCount];
-
-            continue;
-        }
-
-        if ($size[$left] < $size[$right]) {
-            [$left, $right] = [$right, $left];
-        }
-
-        $parent[$right] = $left;
-        $size[$left] += $size[$right];
-        $components--;
-    }
-
-    if ($components !== 2) {
-        return [0, 0];
-    }
-
-    $cut = 0;
-
-    foreach ($edges as $edge) {
-        if (find($parent, $edge[0]) !== find($parent, $edge[1])) {
-            $cut++;
-        }
-    }
-
-    $roots = [];
-
-    for ($node = 0; $node < $componentCount; $node++) {
-        $root = find($parent, $node);
-        $roots[$root] = $size[$root];
-    }
-
-    $product = 1;
-
-    foreach ($roots as $rootSize) {
-        $product *= $rootSize;
-    }
-
-    return [$cut, $product];
-}
-
-/**
- * @param  array<int, int>  $parent
- */
-function find(array &$parent, int $node): int
-{
-    while ($parent[$node] !== $node) {
-        $parent[$node] = $parent[$parent[$node]];
-        $node = $parent[$node];
-    }
-
-    return $node;
+    throw new RuntimeException('No 3-wire cut found while growing the group.');
 }
 
 /**
