@@ -33,15 +33,68 @@ echo PHP_EOL;
  */
 function partOne(array $lines): int
 {
-    return 0;
+    $scores = array_map(function ($line) {
+        $levels = explode(' ', $line);
+
+        return isSafe($levels);
+        
+    }, $lines);
+
+    return array_sum($scores);
 }
 
+/**
+ * @param  list<string>  $levels
+ */
+function isSafe(array $levels): int
+{
+    $direction = '';
+
+    foreach ($levels as $index => $level) {
+        if ($index === 0) {
+            continue;
+        }
+
+        $levelDiff = (int) $level - (int) $levels[$index - 1];
+
+        if ($direction === '') {
+            $direction = $levelDiff >= 1 ? 'increase' : 'decrease';
+        }
+
+        if ($direction === 'increase' && $levelDiff >= 1 && $levelDiff <= 3) {
+            continue;
+        }
+
+        if ($direction === 'decrease' && $levelDiff <= -1 && $levelDiff >= -3) {
+            continue;
+        }
+
+        return 0;
+    }
+
+    return 1;
+}
 /**
  * @param  list<string>  $lines
  */
 function partTwo(array $lines): int
 {
-    return 0;
+    $scores = array_map(function ($line) {
+        $levels = explode(' ', $line);
+
+        foreach ($levels as $index => $level) {
+            $without = $levels;
+            unset($without[$index]);
+
+            if (isSafe(array_values($without)) === 1) {
+                return 1;
+            }
+        }
+
+        return 0;
+    }, $lines);
+
+    return array_sum($scores);
 }
 
 /**
