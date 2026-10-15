@@ -33,7 +33,23 @@ echo PHP_EOL;
  */
 function partOne(array $lines): int
 {
-    return 0;
+    $left = [];
+    $right = [];
+
+    foreach ($lines as $line) {
+        preg_match('/(\d+)\s+(\d+)/', $line, $matches);
+        $left[] = (int) $matches[1];
+        $right[] = (int) $matches[2];
+    }
+
+    sort($left);
+    sort($right);
+
+    $distances = array_map(function ($left, $right) {
+        return abs($left - $right);
+    }, $left, $right);
+
+    return array_sum($distances);
 }
 
 /**
@@ -41,7 +57,24 @@ function partOne(array $lines): int
  */
 function partTwo(array $lines): int
 {
-    return 0;
+    $left = [];
+    $right = [];
+
+    foreach ($lines as $line) {
+        preg_match('/(\d+)\s+(\d+)/', $line, $matches);
+        $left[] = (int) $matches[1];
+        $right[] = (int) $matches[2];
+    }
+
+    $countsLeft = array_count_values($right);
+    $countsRight = array_count_values($left);
+    $score = 0;
+
+    foreach ($countsLeft as $left => $count) {
+        $score += $count * $left * ($countsRight[$left] ?? 0);
+    }
+
+    return $score;
 }
 
 /**
